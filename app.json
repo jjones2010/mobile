@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Spelling Practice",
+    "slug": "spelling-practice",
+    "version": "1.0.3",
+    "buildNumber": "29",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#4F46E5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.spellingpractice.app",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "We use speech recognition to help students practice spelling words by speaking them aloud. This allows students to spell words using their voice instead of typing.",
+        "NSMicrophoneUsageDescription": "We use the microphone to listen to your child's spelling practice when they use voice input mode. Audio is processed in real-time and not recorded or stored.",
+        "NSPhotoLibraryUsageDescription": "This app does not access your photo library. This permission is required by a third-party library but is not used.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.spellingpractice.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-speech-recognition"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "039500de-6c12-43dd-a5be-d8ef6a22c5f8"
+      }
+    }
+  }
+}

@@ -1,0 +1,614 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Switch,
+} from 'react-native';
+import { practiceAPI } from '../services/api';
+import { ttsService, speechRecognitionService } from '../services/speechService';
+import { hasFeatureAccess, FEATURES, getUpgradeMessage } from '../services/premiumFeatures';
+
+const PracticeScreen = ({ route, navigation }) => {
+  const { task, subscriptionTier } = route.params;
+  
+  // Get the assigned input mode from the task (type-only, spell-only, say-spell-say)
+  const assignedInputMode = task.testInputMode || 'type-only';
+  const allowInputModeChange = task.allowInputModeChange || false;
+  const isTypeOnlyMode = assignedInputMode === 'type-only';
+  
+  // If teacher doesn't allow input mode change, lock to assigned mode
+  const canToggleInputMode = allowInputModeChange && !isTypeOnlyMode;
+  
+  // Determine initial input method based on assigned mode and permissions
+  const getInitialInputMethod = () => {
+    // If locked to assigned mode (no toggle allowed)
+    if (!canToggleInputMode) {
+      // Type-only mode always uses typing
+      if (isTypeOnlyMode) return 'TYPING';
+      // Voice modes (spell-only, say-spell-say) use voice
+      return 'VOICE';
+    }
+    // If flexible, default to typing (student can switch)
+    return 'TYPING';
+  };
+  
+  const [session, setSession] = useState(null);
+  const [words, setWords] = useState([]);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [userInput, setUserInput] = useState('');
+  const [definitionInput, setDefinitionInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [showDefinitionPrompt, setShowDefinitionPrompt] = useState(false);
+  const [inputMethod, setInputMethod] = useState(getInitialInputMethod());
+  const [isListening, setIsListening] = useState(false);
+  const [results, setResults] = useState({
+    correct: 0,
+    total: 0,
+    attempts: [],
+  });
+
+  const hasVoiceAccess = hasFeatureAccess(subscriptionTier, FEATURES.VOICE_INPUT);
+  const hasDefinitionAccess = hasFeatureAccess(subscriptionTier, FEATURES.DEFINITION_ENTRY);
+
+  useEffect(() => {
+    startPracticeSession();
+    return () => {
+      ttsService.stop();
+      speechRecognitionService.destroy();
+    };
+  }, []);
+
+  const startPracticeSession = async () => {
+    try {
+      const response = await practiceAPI.startSession(task.assignmentId);
+      const { session: newSession, words: wordList } = response.data;
+      
+      setSession(newSession);
+      setWords(wordList);
+      setLoading(false);
+      
+      // Speak first word
+      if (wordList.length > 0) {
+        await speakCurrentWord(wordList[0]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to start practice session');
+      navigation.goBack();
+    }
+  };
+
+  const speakCurrentWord = async (word = null) => {
+    const currentWord = word || words[currentWordIndex];
+    if (currentWord) {
+      await ttsService.speakWord(currentWord.wordText, { repeat: 1 });
+    }
+  };
+
+  const handleVoiceToggle = (value) => {
+    if (!hasVoiceAccess) {
+      const message = getUpgradeMessage(FEATURES.VOICE_INPUT);
+      Alert.alert(message.title, message.message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Upgrade', onPress: () => navigation.navigate('Subscription') },
+      ]);
+      return;
+    }
+    setInputMethod(value ? 'VOICE' : 'TYPING');
+  };
+
+  const startVoiceInput = async () => {
+    setIsListening(true);
+    await speechRecognitionService.startListening({
+      onResult: (result) => {
+        setUserInput(result);
+        setIsListening(false);
+      },
+      onError: (error) => {
+        Alert.alert('Error', 'Voice recognition failed. Please try again.');
+        setIsListening(false);
+      },
+    });
+  };
+
+  const stopVoiceInput = async () => {
+    await speechRecognitionService.stopListening();
+    setIsListening(false);
+  };
+
+  const handleSubmitSpelling = async () => {
+    if (!userInput.trim()) {
+      Alert.alert('Error', 'Please enter your spelling');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const currentWord = words[currentWordIndex];
+      const response = await practiceAPI.submitAttempt(
+        session.id,
+        currentWord.id,
+        userInput,
+        inputMethod,
+        null
+      );
+
+      const { attempt } = response.data;
+      setFeedback(attempt);
+
+      // Update results
+      setResults(prev => ({
+        ...prev,
+        total: prev.total + 1,
+        correct: attempt.isCorrect && attempt.attemptNumber === 1 ? prev.correct + 1 : prev.correct,
+        attempts: [...prev.attempts, attempt],
+      }));
+
+      if (attempt.isCorrect) {
+        // Check if definition entry is available
+        if (hasDefinitionAccess) {
+          setShowDefinitionPrompt(true);
+        } else {
+          // Move to next word after delay
+          setTimeout(() => moveToNextWord(), 1500);
+        }
+      } else {
+        // Show correct spelling and allow retry
+        setTimeout(() => {
+          setFeedback(null);
+          setUserInput('');
+        }, 2000);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to submit attempt');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitDefinition = async () => {
+    if (!definitionInput.trim()) {
+      Alert.alert('Error', 'Please enter a definition');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const currentWord = words[currentWordIndex];
+      const response = await practiceAPI.submitAttempt(
+        session.id,
+        currentWord.id,
+        userInput,
+        inputMethod,
+        definitionInput
+      );
+
+      const { attempt } = response.data;
+      
+      // Show definition feedback briefly
+      Alert.alert(
+        attempt.definitionCorrect ? 'Great!' : 'Good Try!',
+        attempt.definitionCorrect 
+          ? 'Your definition is correct!' 
+          : 'Keep practicing definitions!',
+        [{ text: 'OK', onPress: () => moveToNextWord() }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to submit definition');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const skipDefinition = () => {
+    moveToNextWord();
+  };
+
+  const moveToNextWord = () => {
+    setFeedback(null);
+    setUserInput('');
+    setDefinitionInput('');
+    setShowDefinitionPrompt(false);
+
+    if (currentWordIndex < words.length - 1) {
+      const nextIndex = currentWordIndex + 1;
+      setCurrentWordIndex(nextIndex);
+      speakCurrentWord(words[nextIndex]);
+    } else {
+      // Session complete
+      completeSession();
+    }
+  };
+
+  const completeSession = async () => {
+    try {
+      const response = await practiceAPI.completeSession(session.id);
+      const { results: sessionResults } = response.data;
+      
+      navigation.replace('SessionResults', { 
+        results: sessionResults,
+        task,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to complete session');
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading practice session...</Text>
+      </View>
+    );
+  }
+
+  const currentWord = words[currentWordIndex];
+  const progress = ((currentWordIndex + 1) / words.length) * 100;
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backText}>← Exit</Text>
+        </TouchableOpacity>
+        <Text style={styles.progressText}>
+          {currentWordIndex + 1} / {words.length}
+        </Text>
+      </View>
+
+      {/* Progress Bar */}
+      <View style={styles.progressBar}>
+        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+      </View>
+
+      {/* Main Content */}
+      <View style={styles.content}>
+        {!showDefinitionPrompt ? (
+          <>
+            {/* Spelling Practice */}
+            <Text style={styles.instruction}>Listen and spell the word</Text>
+            
+            <TouchableOpacity
+              style={styles.speakerButton}
+              onPress={() => speakCurrentWord()}
+            >
+              <Text style={styles.speakerIcon}>🔊</Text>
+              <Text style={styles.speakerText}>Tap to hear again</Text>
+            </TouchableOpacity>
+
+            {/* Input Method Toggle - Only show if teacher allows it */}
+            {canToggleInputMode && (
+              <View style={styles.toggleContainer}>
+                <Text style={styles.toggleLabel}>Typing</Text>
+                <Switch
+                  value={inputMethod === 'VOICE'}
+                  onValueChange={handleVoiceToggle}
+                  trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
+                  thumbColor="#fff"
+                />
+                <Text style={[styles.toggleLabel, !hasVoiceAccess && styles.premiumLabel]}>
+                  Voice {!hasVoiceAccess && '👑'}
+                </Text>
+              </View>
+            )}
+
+            {/* Input Area */}
+            {inputMethod === 'TYPING' ? (
+              <TextInput
+                style={styles.input}
+                value={userInput}
+                onChangeText={setUserInput}
+                placeholder="Type the word here"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!submitting && !feedback}
+              />
+            ) : (
+              <TouchableOpacity
+                style={[styles.voiceButton, isListening && styles.voiceButtonActive]}
+                onPress={isListening ? stopVoiceInput : startVoiceInput}
+                disabled={submitting}
+              >
+                <Text style={styles.voiceIcon}>{isListening ? '⏹️' : '🎤'}</Text>
+                <Text style={styles.voiceText}>
+                  {isListening ? 'Listening...' : 'Tap to speak'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {userInput && !feedback && (
+              <Text style={styles.previewText}>Your answer: {userInput}</Text>
+            )}
+
+            {/* Feedback */}
+            {feedback && (
+              <View style={[styles.feedback, feedback.isCorrect ? styles.feedbackCorrect : styles.feedbackIncorrect]}>
+                <Text style={styles.feedbackIcon}>
+                  {feedback.isCorrect ? '✓' : '✗'}
+                </Text>
+                <Text style={styles.feedbackText}>
+                  {feedback.isCorrect 
+                    ? 'Correct!' 
+                    : `Incorrect. The correct spelling is: ${feedback.correctWord}`}
+                </Text>
+              </View>
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitButton, (submitting || !userInput || feedback) && styles.submitButtonDisabled]}
+              onPress={handleSubmitSpelling}
+              disabled={submitting || !userInput || feedback}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            {/* Definition Practice */}
+            <Text style={styles.instruction}>Now define the word</Text>
+            <Text style={styles.wordDisplay}>{currentWord.wordText}</Text>
+
+            <TextInput
+              style={[styles.input, styles.definitionInput]}
+              value={definitionInput}
+              onChangeText={setDefinitionInput}
+              placeholder="Enter the definition"
+              multiline
+              numberOfLines={4}
+              editable={!submitting}
+            />
+
+            <View style={styles.definitionButtons}>
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={skipDefinition}
+                disabled={submitting}
+              >
+                <Text style={styles.skipButtonText}>Skip</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.submitButton, styles.definitionSubmitButton, (submitting || !definitionInput) && styles.submitButtonDisabled]}
+                onPress={handleSubmitDefinition}
+                disabled={submitting || !definitionInput}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Score Display */}
+      <View style={styles.scoreContainer}>
+        <Text style={styles.scoreText}>
+          Correct: {results.correct} / {results.total}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 48,
+    backgroundColor: '#fff',
+  },
+  backText: {
+    color: '#3b82f6',
+    fontSize: 16,
+  },
+  progressText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#e5e7eb',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#10b981',
+  },
+  content: {
+    flex: 1,
+    padding: 24,
+    justifyContent: 'center',
+  },
+  instruction: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  speakerButton: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  speakerIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  speakerText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    color: '#1f2937',
+    marginHorizontal: 12,
+  },
+  premiumLabel: {
+    color: '#f59e0b',
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  definitionInput: {
+    height: 120,
+    textAlign: 'left',
+    textAlignVertical: 'top',
+  },
+  voiceButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    borderRadius: 8,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  voiceButtonActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#2563eb',
+  },
+  voiceIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  voiceText: {
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  previewText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  feedback: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  feedbackCorrect: {
+    backgroundColor: '#d1fae5',
+  },
+  feedbackIncorrect: {
+    backgroundColor: '#fee2e2',
+  },
+  feedbackIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  feedbackText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  submitButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#93c5fd',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  wordDisplay: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  definitionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  skipButton: {
+    flex: 1,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    color: '#6b7280',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  definitionSubmitButton: {
+    flex: 2,
+  },
+  scoreContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+});
+
+export default PracticeScreen;
