@@ -83,7 +83,8 @@ const SubUserLoginScreen = ({ navigation, route }) => {
       setStep('email');
       setSubUsers([]);
     } else {
-      navigation.goBack();
+      // Navigate back to main login screen
+      navigation.navigate('Login');
     }
   };
 
