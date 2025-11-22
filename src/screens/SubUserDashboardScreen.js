@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { taskAPI } from '../services/api';
+import { taskAPI, clearAuthToken, clearCurrentUser } from '../services/api';
 
 const SubUserDashboardScreen = ({ navigation, route }) => {
   const { subUser } = route.params;
@@ -36,6 +36,28 @@ const SubUserDashboardScreen = ({ navigation, route }) => {
       subUser,
       subscriptionTier: subUser.parentSubscriptionTier || 'FREE'
     });
+  };
+
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAuthToken();
+            await clearCurrentUser();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'SubUserLogin' }],
+            });
+          },
+        },
+      ]
+    );
   };
 
   const renderTask = ({ item }) => (
@@ -81,8 +103,18 @@ const SubUserDashboardScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Hi, {subUser.name}! 👋</Text>
-        <Text style={styles.subtitle}>Your Spelling Tasks</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.greeting}>Hi, {subUser.name}! 👋</Text>
+            <Text style={styles.subtitle}>Your Spelling Tasks</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.signOutButton}
+            onPress={handleSignOut}
+          >
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {tasks.length === 0 ? (
@@ -119,6 +151,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   greeting: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -128,6 +165,17 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6b7280',
+  },
+  signOutButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  signOutText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   list: {
     padding: 16,
