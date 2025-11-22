@@ -269,6 +269,24 @@ class SpeechRecognitionServiceClass {
         }
       }
 
+      // Configure and activate audio session for recording
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        console.log('Audio session configured for recording');
+      } catch (audioError) {
+        console.error('Audio session configuration error:', audioError);
+        if (onError) {
+          onError(new Error('Failed to configure audio. Please try again.'));
+        }
+        return;
+      }
+
       // Start listening
       this.isListening = true;
       
