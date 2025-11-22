@@ -10,6 +10,7 @@ import {
   ScrollView,
   Share,
   Platform,
+  SafeAreaView,
 } from 'react-native';
 import { subUserAPI, practiceAPI } from '../services/api';
 
@@ -269,12 +270,17 @@ const ProgressReportsScreen = ({ navigation }) => {
         visible={showAnalyticsModal}
         animationType="slide"
         onRequestClose={() => setShowAnalyticsModal(false)}
+        presentationStyle="fullScreen"
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
-              onPress={() => setShowAnalyticsModal(false)}
+              onPress={() => {
+                console.log('Close button pressed');
+                setShowAnalyticsModal(false);
+              }}
               style={styles.closeButton}
+              activeOpacity={0.7}
             >
               <Text style={styles.closeButtonText}>✕ Close</Text>
             </TouchableOpacity>
@@ -284,6 +290,7 @@ const ProgressReportsScreen = ({ navigation }) => {
             <TouchableOpacity
               onPress={handlePrintReport}
               style={styles.printButton}
+              activeOpacity={0.7}
             >
               <Text style={styles.printButtonText}>📄 Share</Text>
             </TouchableOpacity>
@@ -309,7 +316,7 @@ const ProgressReportsScreen = ({ navigation }) => {
               }
             />
           )}
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
