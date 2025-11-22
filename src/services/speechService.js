@@ -228,16 +228,7 @@ class SpeechRecognitionServiceClass {
     this.onError = onError;
 
     try {
-      // Check if speech recognition is available
-      const available = await SpeechRecognition.getAvailableAsync();
-      if (!available) {
-        if (onError) {
-          onError(new Error('Voice input is not available on this device. Please use typing instead.'));
-        }
-        return;
-      }
-
-      // Always check and request permissions
+      // Check and request permissions
       const granted = await this.requestPermissions();
       if (!granted) {
         if (onError) {
