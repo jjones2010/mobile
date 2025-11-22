@@ -208,41 +208,57 @@ class SpeechRecognitionServiceClass {
 
   async requestPermissions() {
     try {
-      // First check and request microphone permission using expo-av (more reliable on iOS)
+      console.log('=== Starting permission request flow ===');
+      
+      // Step 1: Request microphone permission using expo-av
+      console.log('Step 1: Checking microphone permission...');
       const audioPermission = await Audio.getPermissionsAsync();
+      console.log('Microphone permission status:', audioPermission);
       
       if (!audioPermission.granted) {
-        // Request if not granted
+        console.log('Requesting microphone permission...');
         const audioRequest = await Audio.requestPermissionsAsync();
+        console.log('Microphone permission result:', audioRequest);
+        
         if (!audioRequest.granted) {
-          console.log('Microphone permission denied');
+          console.log('❌ Microphone permission denied');
           this.hasPermission = false;
           return false;
         }
+        console.log('✅ Microphone permission granted');
+      } else {
+        console.log('✅ Microphone permission already granted');
       }
       
-      // Then check speech recognition permission
-      const { status: currentStatus, granted: currentGranted } = await SpeechRecognition.getPermissionsAsync();
+      // Step 2: Request speech recognition permission
+      console.log('Step 2: Checking speech recognition permission...');
+      const speechCheck = await SpeechRecognition.getPermissionsAsync();
+      console.log('Speech recognition permission status:', speechCheck);
       
-      if (currentGranted) {
-        console.log('Speech recognition permission already granted');
+      if (speechCheck.granted) {
+        console.log('✅ Speech recognition permission already granted');
         this.hasPermission = true;
         return true;
       }
       
-      // If not granted, request speech recognition permission
-      const { status, granted } = await SpeechRecognition.requestPermissionsAsync();
-      this.hasPermission = granted;
+      // Request speech recognition permission
+      console.log('Requesting speech recognition permission...');
+      const speechRequest = await SpeechRecognition.requestPermissionsAsync();
+      console.log('Speech recognition permission result:', speechRequest);
       
-      if (!granted) {
-        console.log('Speech recognition permission denied. Status:', status);
-      } else {
-        console.log('Speech recognition permission granted');
+      if (!speechRequest.granted) {
+        console.log('❌ Speech recognition permission denied. Status:', speechRequest.status);
+        this.hasPermission = false;
+        return false;
       }
       
-      return granted;
+      console.log('✅ Speech recognition permission granted');
+      this.hasPermission = true;
+      console.log('=== All permissions granted successfully ===');
+      return true;
+      
     } catch (error) {
-      console.error('Permission request error:', error);
+      console.error('❌ Permission request error:', error);
       this.hasPermission = false;
       return false;
     }
