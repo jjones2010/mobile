@@ -194,10 +194,23 @@ class SpeechRecognitionServiceClass {
       const audioPermission = await Audio.getPermissionsAsync();
       const speechPermission = await SpeechRecognition.getPermissionsAsync();
       
-      const hasPermissions = audioPermission.granted && speechPermission.granted;
+      console.log('=== Permission Check ===');
+      console.log('Audio permission object:', JSON.stringify(audioPermission));
+      console.log('Speech permission object:', JSON.stringify(speechPermission));
+      console.log('Audio granted:', audioPermission.granted);
+      console.log('Audio status:', audioPermission.status);
+      console.log('Speech granted:', speechPermission.granted);
+      console.log('Speech status:', speechPermission.status);
+      
+      // Check if permissions are granted OR if status is 'granted'
+      const audioGranted = audioPermission.granted === true || audioPermission.status === 'granted';
+      const speechGranted = speechPermission.granted === true || speechPermission.status === 'granted';
+      
+      const hasPermissions = audioGranted && speechGranted;
       this.hasPermission = hasPermissions;
       
-      console.log('Permission check - Audio:', audioPermission.granted, 'Speech:', speechPermission.granted);
+      console.log('Final check - Audio granted:', audioGranted, 'Speech granted:', speechGranted);
+      console.log('Has all permissions:', hasPermissions);
       
       return hasPermissions;
     } catch (error) {
@@ -213,14 +226,18 @@ class SpeechRecognitionServiceClass {
       // Step 1: Request microphone permission using expo-av
       console.log('Step 1: Checking microphone permission...');
       const audioPermission = await Audio.getPermissionsAsync();
-      console.log('Microphone permission status:', audioPermission);
+      console.log('Microphone permission status:', JSON.stringify(audioPermission));
       
-      if (!audioPermission.granted) {
+      const audioGranted = audioPermission.granted === true || audioPermission.status === 'granted';
+      
+      if (!audioGranted) {
         console.log('Requesting microphone permission...');
         const audioRequest = await Audio.requestPermissionsAsync();
-        console.log('Microphone permission result:', audioRequest);
+        console.log('Microphone permission result:', JSON.stringify(audioRequest));
         
-        if (!audioRequest.granted) {
+        const audioRequestGranted = audioRequest.granted === true || audioRequest.status === 'granted';
+        
+        if (!audioRequestGranted) {
           console.log('❌ Microphone permission denied');
           this.hasPermission = false;
           return false;
@@ -233,9 +250,11 @@ class SpeechRecognitionServiceClass {
       // Step 2: Request speech recognition permission
       console.log('Step 2: Checking speech recognition permission...');
       const speechCheck = await SpeechRecognition.getPermissionsAsync();
-      console.log('Speech recognition permission status:', speechCheck);
+      console.log('Speech recognition permission status:', JSON.stringify(speechCheck));
       
-      if (speechCheck.granted) {
+      const speechGranted = speechCheck.granted === true || speechCheck.status === 'granted';
+      
+      if (speechGranted) {
         console.log('✅ Speech recognition permission already granted');
         this.hasPermission = true;
         return true;
@@ -244,9 +263,11 @@ class SpeechRecognitionServiceClass {
       // Request speech recognition permission
       console.log('Requesting speech recognition permission...');
       const speechRequest = await SpeechRecognition.requestPermissionsAsync();
-      console.log('Speech recognition permission result:', speechRequest);
+      console.log('Speech recognition permission result:', JSON.stringify(speechRequest));
       
-      if (!speechRequest.granted) {
+      const speechRequestGranted = speechRequest.granted === true || speechRequest.status === 'granted';
+      
+      if (!speechRequestGranted) {
         console.log('❌ Speech recognition permission denied. Status:', speechRequest.status);
         this.hasPermission = false;
         return false;
