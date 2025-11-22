@@ -3,7 +3,7 @@
     "name": "Spelling Practice",
     "slug": "spelling-practice",
     "version": "1.0.3",
-    "buildNumber": "24",
+    "buildNumber": "25",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -17,7 +17,11 @@
         "NSSpeechRecognitionUsageDescription": "We use speech recognition to help students practice spelling words by speaking them aloud. This allows students to spell words using their voice instead of typing.",
         "NSMicrophoneUsageDescription": "We use the microphone to listen to your child's spelling practice when they use voice input mode. Audio is processed in real-time and not recorded or stored.",
         "NSPhotoLibraryUsageDescription": "This app does not access your photo library. This permission is required by a third-party library but is not used.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": []
+      },
+      "entitlements": {
+        "com.apple.security.microphone": true
       }
     },
     "android": {
