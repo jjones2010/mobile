@@ -3,7 +3,7 @@
     "name": "Spelling Practice",
     "slug": "spelling-practice",
     "version": "1.0.3",
-    "buildNumber": "23",
+    "buildNumber": "24",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -27,7 +27,13 @@
       ]
     },
     "plugins": [
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "We use the microphone to listen to your child's spelling practice when they use voice input mode."
+        }
+      ]
     ],
     "extra": {
       "eas": {
