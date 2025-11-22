@@ -292,21 +292,30 @@ class SpeechRecognitionServiceClass {
     this.onError = onError;
 
     try {
-      // First check if we already have permissions
-      const hasPermissions = await this.checkPermissions();
+      console.log('=== START LISTENING CALLED ===');
       
-      if (!hasPermissions) {
-        // Try to request permissions
-        const granted = await this.requestPermissions();
-        if (!granted) {
+      // Step 1: Request microphone permission first
+      console.log('Step 1: Requesting microphone permission...');
+      const audioPermission = await Audio.getPermissionsAsync();
+      console.log('Current audio permission:', JSON.stringify(audioPermission));
+      
+      if (!audioPermission.granted && audioPermission.status !== 'granted') {
+        console.log('Audio not granted, requesting...');
+        const audioRequest = await Audio.requestPermissionsAsync();
+        console.log('Audio request result:', JSON.stringify(audioRequest));
+        
+        if (!audioRequest.granted && audioRequest.status !== 'granted') {
+          console.log('❌ Microphone permission denied');
           if (onError) {
             onError(new Error('Microphone permission is required for voice input. Please enable it in your device Settings.'));
           }
           return;
         }
       }
+      console.log('✅ Microphone permission OK');
 
-      // Configure and activate audio session for recording
+      // Step 2: Configure audio session for recording
+      console.log('Step 2: Configuring audio session...');
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
@@ -315,16 +324,34 @@ class SpeechRecognitionServiceClass {
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
         });
-        console.log('Audio session configured for recording');
+        console.log('✅ Audio session configured for recording');
       } catch (audioError) {
-        console.error('Audio session configuration error:', audioError);
+        console.error('❌ Audio session configuration error:', audioError);
         if (onError) {
           onError(new Error('Failed to configure audio. Please try again.'));
         }
         return;
       }
 
+      // Step 3: Check speech recognition permission
+      console.log('Step 3: Checking speech recognition permission...');
+      const speechPermission = await SpeechRecognition.getPermissionsAsync();
+      console.log('Current speech permission:', JSON.stringify(speechPermission));
+      
+      // If speech recognition permission is not granted, request it
+      // Note: On iOS, the actual prompt will appear when we call start()
+      if (!speechPermission.granted && speechPermission.status !== 'granted') {
+        console.log('Speech recognition not granted, requesting...');
+        const speechRequest = await SpeechRecognition.requestPermissionsAsync();
+        console.log('Speech request result:', JSON.stringify(speechRequest));
+        
+        // Note: iOS may not show the prompt until start() is called
+        // So we'll proceed and let start() trigger the prompt if needed
+      }
+      console.log('✅ Speech recognition permission check complete');
+
       // Start listening
+      console.log('Step 4: Starting speech recognition...');
       this.isListening = true;
       
       const options = {
@@ -376,12 +403,33 @@ class SpeechRecognitionServiceClass {
         }
       });
 
+      console.log('Step 5: Calling SpeechRecognition.start()...');
+      console.log('Options:', JSON.stringify(options));
+      
+      // On iOS, the speech recognition permission prompt will appear HERE
+      // when start() is called for the first time
       await SpeechRecognition.start(options);
+      
+      console.log('✅ SpeechRecognition.start() called successfully');
+      console.log('=== LISTENING STARTED ===');
+      
     } catch (error) {
-      console.error('Speech recognition error:', error);
+      console.error('❌ Speech recognition error:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+      
       this.isListening = false;
+      
       if (onError) {
-        const errorMessage = error?.message || String(error) || 'Voice recognition failed. Please try again.';
+        let errorMessage = error?.message || String(error) || 'Voice recognition failed. Please try again.';
+        
+        // Check if it's a permission error
+        const errorStr = String(error).toLowerCase();
+        if (errorStr.includes('permission') || errorStr.includes('not-allowed') || errorStr.includes('denied')) {
+          errorMessage = 'Speech recognition permission is required. Please enable "Speech Recognition" in your device Settings under this app.';
+        }
+        
         onError(new Error(errorMessage));
       }
     }
