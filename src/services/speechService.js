@@ -185,6 +185,7 @@ class SpeechRecognitionServiceClass {
     this.onResult = null;
     this.onError = null;
     this.hasPermission = false;
+    this.listener = null;
   }
 
   async checkPermissions() {
@@ -279,8 +280,14 @@ class SpeechRecognitionServiceClass {
         requiresOnDeviceRecognition: false,
       };
 
-      // Set up event handlers
-      SpeechRecognition.addSpeechRecognitionListener((event) => {
+      // Remove old listener if exists to prevent memory leaks
+      if (this.listener) {
+        this.listener.remove();
+        this.listener = null;
+      }
+
+      // Set up event handlers and store subscription
+      this.listener = SpeechRecognition.addSpeechRecognitionListener((event) => {
         if (event.type === 'result') {
           const transcript = event.results?.[0]?.transcript;
           if (transcript && this.onResult) {
@@ -349,6 +356,13 @@ class SpeechRecognitionServiceClass {
 
   async destroy() {
     await this.stopListening();
+    
+    // Remove event listener to prevent memory leaks
+    if (this.listener) {
+      this.listener.remove();
+      this.listener = null;
+    }
+    
     this.onResult = null;
     this.onError = null;
   }
