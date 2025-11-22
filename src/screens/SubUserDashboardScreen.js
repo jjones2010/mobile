@@ -48,12 +48,22 @@ const SubUserDashboardScreen = ({ navigation, route }) => {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
-            await clearAuthToken();
-            await clearCurrentUser();
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'SubUserLogin' }],
-            });
+            try {
+              console.log('Starting sign out...');
+              await clearAuthToken();
+              console.log('Auth token cleared');
+              await clearCurrentUser();
+              console.log('Current user cleared');
+              
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'SubUserLogin' }],
+              });
+              console.log('Navigation reset complete');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
           },
         },
       ]
