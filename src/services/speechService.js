@@ -187,21 +187,44 @@ class SpeechRecognitionServiceClass {
     this.hasPermission = false;
   }
 
+  async checkPermissions() {
+    try {
+      // Check both audio and speech recognition permissions
+      const audioPermission = await Audio.getPermissionsAsync();
+      const speechPermission = await SpeechRecognition.getPermissionsAsync();
+      
+      const hasPermissions = audioPermission.granted && speechPermission.granted;
+      this.hasPermission = hasPermissions;
+      
+      console.log('Permission check - Audio:', audioPermission.granted, 'Speech:', speechPermission.granted);
+      
+      return hasPermissions;
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return false;
+    }
+  }
+
   async requestPermissions() {
     try {
-      // First request microphone permission using expo-av (more reliable on iOS)
-      const audioPermission = await Audio.requestPermissionsAsync();
+      // First check and request microphone permission using expo-av (more reliable on iOS)
+      const audioPermission = await Audio.getPermissionsAsync();
       
       if (!audioPermission.granted) {
-        console.log('Microphone permission denied');
-        this.hasPermission = false;
-        return false;
+        // Request if not granted
+        const audioRequest = await Audio.requestPermissionsAsync();
+        if (!audioRequest.granted) {
+          console.log('Microphone permission denied');
+          this.hasPermission = false;
+          return false;
+        }
       }
       
       // Then check speech recognition permission
       const { status: currentStatus, granted: currentGranted } = await SpeechRecognition.getPermissionsAsync();
       
       if (currentGranted) {
+        console.log('Speech recognition permission already granted');
         this.hasPermission = true;
         return true;
       }
@@ -212,11 +235,14 @@ class SpeechRecognitionServiceClass {
       
       if (!granted) {
         console.log('Speech recognition permission denied. Status:', status);
+      } else {
+        console.log('Speech recognition permission granted');
       }
       
       return granted;
     } catch (error) {
       console.error('Permission request error:', error);
+      this.hasPermission = false;
       return false;
     }
   }
@@ -228,13 +254,18 @@ class SpeechRecognitionServiceClass {
     this.onError = onError;
 
     try {
-      // Check and request permissions
-      const granted = await this.requestPermissions();
-      if (!granted) {
-        if (onError) {
-          onError(new Error('Microphone permission is required for voice input. Please enable it in Settings > Spelling Practice > Microphone.'));
+      // First check if we already have permissions
+      const hasPermissions = await this.checkPermissions();
+      
+      if (!hasPermissions) {
+        // Try to request permissions
+        const granted = await this.requestPermissions();
+        if (!granted) {
+          if (onError) {
+            onError(new Error('Microphone permission is required for voice input. Please enable it in your device Settings.'));
+          }
+          return;
         }
-        return;
       }
 
       // Start listening
